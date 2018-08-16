@@ -52,7 +52,7 @@
     <select id="vivSelect"></select>
   <script type="text/javascript">
 
-    var files = "<?php  foreach(glob('./syntheaold/*.json') as $filename) { echo $filename.",";  };?>"
+    var files = "<?php  foreach(glob('./local/*.json') as $filename) { echo $filename.",";  };?>"
     filesArray = files.split(",")
     filesArray.pop()
     for( var localFile in filesArray) {
@@ -65,6 +65,7 @@
     <input type="text" id="timeline_date_stop">
     <button id="timeline_date_update">Update</button>
     <button id="timeline_date_reset">Reset</button>
+    <div id="patInfoPlaceholder"/>
   </div>
   <div id="legend_placeholder" style="position:relative; left:20px;"></div>
 
@@ -91,11 +92,16 @@ var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effecti
 	"Condition": {"color": "black", "height":.7,"sd": "onsetDateTime" ,"ed":"abatementDateTime","desc":"code"},
 	"Immunization": {"color": "pink", "height":.8,"sd": "date" ,"ed":"","desc":"vaccineCode"},
 }
+
+var patDict = ["name","gender","birthDate","address"]
 var chartHeight = height - margin.top - margin.bottom;
 var chartWidth = width - margin.left - margin.right
 var y = d3.scale.linear()
     .range([chartHeight, 0]);
+var x = d3.time.scale()
+  .range([0, width]);
 var shownPackage;
+var patInfo = {};
 var index = 0
 colors = d3.scale.category20b()
 backgroundColors = d3.scale.category20()
@@ -109,7 +115,7 @@ $("#timeline_date_stop").datepicker()
 var organizationDict = {};
 var organizationColorDict = {};
 var legendShapeChart = d3.select('#legend_placeholder').insert("svg")
-                .attr("height", 50)
+                .attr("height", 70)
                 .attr("width",1500)
 //Taken from http://bl.ocks.org/robschmuecker/6afc2ecb05b191359862
 // =================================================================
@@ -261,6 +267,7 @@ function findDescription(d) {
     d3.json(d3.select('#vivSelect').property('value'), function(json) {
         currentJSON=json;
         resetMenuFile(json,"","", Object.keys(visitDict))
+        createLegend();
     });
   });
 
@@ -271,6 +278,7 @@ function findDescription(d) {
 function resetMenuFile(json,start,stop,filterList) {
   condDepthMax = 0
   existingConds = []
+
   //Read in the INSTALL JSON file
     /*
     *  Capture the package specific information.  The start date
@@ -287,8 +295,11 @@ function resetMenuFile(json,start,stop,filterList) {
              organizationDict[val["resource"]['id']] = val["resource"]
              organizationColorDict[val["resource"]['identifier'][0]["value"]] = colors(indx)
          }
+      } else if (val["resource"]['resourceType'] == "Patient") {
+          patInfo = val["resource"];
       }
     })
+    createPatientLegend(patInfo);
     //ptInfoArray.sort(function(a,b) {console.log(a); return a.issued.localeCompare(b.issued); });
     if (start === "") {start = findStartDate(ptInfoArray[0])}
     if (stop === "") { stop = endDate}
@@ -300,7 +311,7 @@ function resetMenuFile(json,start,stop,filterList) {
     // Generate a time scale to position the dates along the axis
     // domain uses the dates above, rangeRound is set to keep it within
     // the visualization window
-    var x = d3.time.scale()
+    x = d3.time.scale()
       .domain([new Date(start), new Date(stop)])
       .range([0, width]);
 
@@ -325,7 +336,7 @@ function resetMenuFile(json,start,stop,filterList) {
          if (updatedTransform.lastIndexOf('scale') == -1){
              updatedTransform= updatedTransform+"scale(1)";
          }
-         var scaleTxt = "scale(1.3)"
+         var scaleTxt = "scale(1.4)"
          if (isZoomed) {
              scaleTxt = "scale(1)";
          }
@@ -333,6 +344,26 @@ function resetMenuFile(json,start,stop,filterList) {
          updatedTransform= updatedTransform.replace(/scale\([0-9.]+\)/,scaleTxt);
          svg.select('g').attr("transform",updatedTransform);
       })
+        .on("contextmenu", function (d, i) {
+            d3.event.preventDefault();
+            d3.selectAll(".summaryBar").remove()
+            var display = svg.select('g')
+            var transform = display.attr("transform")
+            var regex = /translate\(([-0-9]+)[,] *([-0-9]+)\)(?:scale\(([-0-9.]+)\))*/
+            var matches = regex.exec(transform);
+            var scale= 1
+            if (matches[3]) {scale = matches[3]}
+            var xVal =(d3.event.x-matches[1])/scale
+            var selectBar = display.append("line")
+                                     .attr('class','summaryBar')
+                                     .attr("x1", xVal)
+                                     .attr("y1", 0)
+                                     .attr("x2", xVal)
+                                     .attr("y2", height)
+                                     .on("click", function(event) {
+                                        findLastObjects(xVal)
+                                     })
+        });
     svg.append('g')
       .attr('transform', 'translate(' + margin.left + ', ' + margin.top + ')')
       .attr('class', 'x axis')
@@ -403,7 +434,7 @@ function resetMenuFile(json,start,stop,filterList) {
       })
       .attr('stroke-linecap', 'butt')
       .attr('stroke-width', 1.5)
-      
+
       svgG.call(xAxis)
       // Selecting the text to to be able to modify the labels for the axis
       // 1. have the text run vertically
@@ -426,57 +457,70 @@ function resetMenuFile(json,start,stop,filterList) {
       .on("click", rect_onClick);
 };
 
+function findLastObjects(xPos) {
+    var lastObjects = {}
+    d3.selectAll("rect.bar")[0].forEach(function(obj,i) {
+      var entry = d3.select(obj)[0][0];
+      if (entry.attributes['x'].nodeValue <= xPos) {
+        // "Totally different objects: replace entry with new value
+        if ((Object.keys(lastObjects).indexOf(entry.__data__.resourceType) == -1) ||
+           (lastObjects[entry.__data__.resourceType][0].attributes['x'].nodeValue < entry.attributes['x'].nodeValue)) {
+            lastObjects[entry.__data__.resourceType] = [entry]
+        }
+          //same objects on the same day: stack in array
+        else if (lastObjects[entry.__data__.resourceType][0].attributes['x'].nodeValue == entry.attributes['x'].nodeValue) {
+            lastObjects[entry.__data__.resourceType].push(entry);
+        }
+      }
 
-// taken from d3.treeview.js to allow file to  stand alone
-// ============================================================
-function findNodeStroke(d) {
-  var color = "#1bb15c"
-  if (d.hasRequirements || d.isRequirement) { color = "#7C84DE"}
-  if (d.recentUpdate == "Update") {color = "#DC7A20"}
-  if (d.recentUpdate == "New Requirement") {color = "#B03A57 "}
-  return color
-}
-
-function find_node_shape(d) {
-  var shape = "circle";
-  if (d.isRequirement) {
-    shape = "cross"
-  } else if ((d.children || d._children) && !d.leafFunction) {
-    shape = "triangle-up";
-  } else if (d.hasSubpackage) {
-    shape = "diamond";
-  } else if (d.isSubpackage) {
-    shape = "square";
-  }
-  return shape;
+    });
+    rect_onClick(lastObjects)
 }
 // ============================================================
+function createPatientLegend(patientDict) {
+    $("#patInfoPlaceholder").html('<h4>Patient Information</h4><ul class="columns"">');
+    Object.keys(patientDict).forEach(function(key) {
+        if (patDict.indexOf(key) != -1) {
+            var objectData = JSON.stringify(patientDict[key])
+            if (key == "name") {
+               objectData = `${patientDict[key][0]['prefix']} ${patientDict[key][0]['given']} ${patientDict[key][0]['family']}`
+               if  (patientDict[key].length > 1) {
+                 objectData = objectData + `(nee ${patientDict[key][1]['family']})`
+               }
+            } else if (key == "address") {
+                objectData = '<ul class="columns">'
+                patientDict[key].forEach(function(addr) {
+                  objectData += `<li>${addr["line"]} ${addr["city"]},${addr["state"]} ${addr["postalCode"]} </li> `
+                })
+                objectData += '</ul>'
+            }
+            $("#patInfoPlaceholder ul").append("<li>"+key+":"+objectData+"</li>")
+        }
+    });
+    $("#patInfoPlaceholder").append("</ul>")
+}
 function createLegend() {
   var legend = legendShapeChart.append("svg:g").selectAll("g.legend")
     .attr("transform", function(d, i) {return "translate(" + (i * 125) +",30)"; }).append("path")
-            .style("stroke",findNodeStroke)
-            .attr("d",d3.svg.symbol().type(find_node_shape))
-            .attr("name", find_node_shape)
+            .style("stroke", "black")
             .attr("r", 1e-6)
     .data(Object.keys(visitDict))
-    .enter()    
+    .enter()
 
-  legend.append("svg:text")
-    .attr("y", 25)
+  legend.append("g:rect")
+    .attr("y", 40)
+    .attr("width", 120)
+    .attr("height", 20)
     .attr("class", function(d) {return "legend"})
     .attr("x", function(d,i) { return 0 + (150*i)})
-    .attr("dy", ".31em")
     .attr("fill",function(d) {return visitDict[d].color;})
-    .attr("stroke", "black")
-    .attr("stroke-width", .25)
-    .text(function(d) { return  d; })
     .on("click", function(d) {
       var deactivate = false;
       // Find elements that are active to deactivate
       d3.select('#legend_placeholder').selectAll('.active')
       .attr("fill", function(element) {
         var returnColor  = visitDict[element].color;
-        if(d === element ) { deactivate= true; returnColor = "gray" } 
+        if(d === element ) { deactivate= true; returnColor = "gray" }
         return returnColor
       }).attr("class", function(element) {
         var classVal = "active"
@@ -485,10 +529,10 @@ function createLegend() {
       })
       if (!deactivate) {
         // find "non-active" elements to activate
-        d3.select('#legend_placeholder').selectAll('text:not(.active)')
+        d3.select('#legend_placeholder').selectAll('rect:not(.active)')
         .attr("fill", function(element) {
           var returnColor  = "gray";
-          if(d === element ) { returnColor = visitDict[d].color } 
+          if(d === element ) { returnColor = visitDict[d].color }
           return returnColor
         }).attr("class", function(element) {
           var classVal = ""
@@ -507,17 +551,19 @@ function createLegend() {
                 $("#timeline_date_stop")[0].value,
                shownTypes)
     });
+  legend.append("text")
+    .text(function(d) { return(d) })
+    .attr("y", 35)
+    .attr("x", function(d,i) { return 0 + (150*i)})
 
-  var legend = legendShapeChart.selectAll("svg")
+  var legend = d3.select('#legend_placeholder').selectAll("svg")
   legend.append("text")
           .attr("x", 0)
-          .attr("y", 10 )
+          .attr("y", 20 )
           .attr("text-anchor", "left")
           .style("font-size", "16px")
           .text("Color Legend")
 }
-// Start the visualization at the
-
 //d3.select("#legend_placeholder").datum(null).call(legendShapeChart);
 createLegend();
 
