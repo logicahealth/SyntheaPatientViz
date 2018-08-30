@@ -8,15 +8,15 @@
   <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
   <script src="//d3js.org/d3.v3.min.js"></script>
   <script src="//d3js.org/d3-queue.v3.min.js"></script>
-  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css"/>
   <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.0/jquery-ui.min.js"></script>
-  <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.0/themes/smoothness/jquery-ui.css">
-  <link rel="stylesheet" href="//code.jquery.com/ui/1.11.0/themes/smoothness/jquery-ui.css">
+  <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.11.0/themes/smoothness/jquery-ui.css"/>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.11.0/themes/smoothness/jquery-ui.css"/>
     <?php
       include_once "synthea_scale.css";
     ?>
     <!-- JQuery Buttons -->
-    <script>
+    <script type="text/javascript">
       $(function() {
         $( "button" ).button().click(function(event){
           event.preventDefault();
@@ -50,7 +50,7 @@
 
     <label > Select synthetic patient file:</label>
     <select id="vivSelect"></select>
-  <script type="text/javascript">
+  <script type="application/javascript">
 
     var files = "<?php  foreach(glob('./local/*.json') as $filename) { echo $filename.",";  };?>"
     filesArray = files.split(",")
@@ -76,7 +76,7 @@
  </div>
 <div id="treeview_placeholder"/>
   <svg class="chart" ></svg>
-<script type="text/javascript">
+<script type="application/javascript">
 var margin = {top: 40, right: 40, bottom: 40, left:40},
         width = 1500,
         height =750;
@@ -207,13 +207,34 @@ function rect_onClick(d) {
                 if(key === "serviceProvider") {
                     objectData = organizationDict[d.serviceProvider.reference.substr(9)]
                 }
-                $("#filteredObjs").append("<p>"+key+":"+JSON.stringify(objectData)+"</p>")
+                $("#filteredObjs").append("<p>"+key+":<pre>"+JSON.stringify(objectData,null,2)+"</pre></p>")
             });
           }
        };
        $('#dialog-modal').dialog(overlayDialogObj);
        $('#dialog-modal').show();
 }
+
+function summary_onClick(d) {
+    var overlayDialogObj = {
+          autoOpen: true,
+          height: ($(window).height() - 200),
+          position : {my: "top center", at: "top center", of: $("#treeview_placeholder")},
+          width: 700,
+          modal: true,
+          title: "Summary of patient information",
+          open: function (event) {
+           $("#filteredObjs").empty();
+            Object.keys(d).forEach(function(key) {
+                var objectData = d[key]
+                $("#filteredObjs").append("<p><b>"+key+":</b>"+objectData+"</p>")
+            });
+          }
+       };
+       $('#dialog-modal').dialog(overlayDialogObj);
+       $('#dialog-modal').show();
+}
+
 
 function findStartDate(d) {
   var startDate=''
@@ -360,9 +381,12 @@ function resetMenuFile(json,start,stop,filterList) {
                                      .attr("y1", 0)
                                      .attr("x2", xVal)
                                      .attr("y2", height)
+                                     .attr("stroke-width", 5)
                                      .on("click", function(event) {
                                         findLastObjects(xVal)
                                      })
+
+           // react on right-clicking
         });
     svg.append('g')
       .attr('transform', 'translate(' + margin.left + ', ' + margin.top + ')')
@@ -459,8 +483,11 @@ function resetMenuFile(json,start,stop,filterList) {
 
 function findLastObjects(xPos) {
     var lastObjects = {}
+    var lastObjectsPretty = {}
     d3.selectAll("rect.bar")[0].forEach(function(obj,i) {
       var entry = d3.select(obj)[0][0];
+      console.log(entry);
+
       if (entry.attributes['x'].nodeValue <= xPos) {
         // "Totally different objects: replace entry with new value
         if ((Object.keys(lastObjects).indexOf(entry.__data__.resourceType) == -1) ||
@@ -472,9 +499,18 @@ function findLastObjects(xPos) {
             lastObjects[entry.__data__.resourceType].push(entry);
         }
       }
-
     });
-    rect_onClick(lastObjects)
+    Object.keys(lastObjects).forEach(function(obj,indx) {
+      lastObjectsPretty[obj] = ''
+      lastObjects[obj].forEach( function (entryObj, indx) {
+        var entry = d3.select(entryObj)[0][0];
+        var header1Text = "</br>Status: " + entry.__data__.status +
+                      "</br>Description: " + findDescription(entry.__data__) +
+                      "</br>Date: " + findStartDate(entry.__data__) +"</br></br>";
+        lastObjectsPretty[obj] += header1Text;
+      })
+    });
+    summary_onClick(lastObjectsPretty)
 }
 // ============================================================
 function createPatientLegend(patientDict) {
