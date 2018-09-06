@@ -82,15 +82,15 @@ var margin = {top: 40, right: 40, bottom: 40, left:40},
         height =750;
 var originalTransform = [40,60];
 
-var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effectiveDateTime" ,"ed":"","desc":"code"},
-	"Claim": {"color": "orange", "height":.1,"sd": "billablePeriod" ,"ed":"billablePeriod","desc":"total"},
-	"MedicationRequest": {"color": "yellow", "height":.2,"sd": "authoredOn" ,"ed":"","desc":"medicationCodeableConcept"},
-	"Encounter": {"color": "green", "height":.3,"sd": "period" ,"ed":"period","desc":"type"},
-	"Observation": {"color": "blue", "height":.4,"sd": "issued" ,"ed":"","desc":"code"},
-	"CarePlan": {"color": "purple", "height":.5,"sd": "period" ,"ed":"period","desc":"category"},
-	"Procedure": {"color": "steelblue", "height":.6,"sd": ["performedDateTime", "performedPeriod"] ,"ed":["performedDateTime", "performedPeriod"],"desc":"code"},
-	"Condition": {"color": "black", "height":.7,"sd": "onsetDateTime" ,"ed":"abatementDateTime","desc":"code"},
-	"Immunization": {"color": "pink", "height":.8,"sd": "date" ,"ed":"","desc":"vaccineCode"},
+var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effectiveDateTime" ,"ed":"","desc":"code", "status":"status"},
+	"Claim": {"color": "orange", "height":.1,"sd": "billablePeriod" ,"ed":"billablePeriod","desc":"total", "status":"status"},
+	"MedicationRequest": {"color": "yellow", "height":.2,"sd": "authoredOn" ,"ed":"","desc":"medicationCodeableConcept", "status":"status"},
+	"Encounter": {"color": "green", "height":.3,"sd": "period" ,"ed":"period","desc":"type", "status":"status"},
+	"Observation": {"color": "blue", "height":.4,"sd": "issued" ,"ed":"","desc":"code", "status":"status"},
+	"CarePlan": {"color": "purple", "height":.5,"sd": "period" ,"ed":"period","desc":"category", "status":"status"},
+	"Procedure": {"color": "steelblue", "height":.6,"sd": ["performedDateTime", "performedPeriod"] ,"ed":["performedDateTime", "performedPeriod"],"desc":"code", "status":"status"},
+	"Condition": {"color": "black", "height":.7,"sd": "onsetDateTime" ,"ed":"abatementDateTime","desc":"code", "status":"clinicalStatus"},
+	"Immunization": {"color": "pink", "height":.8,"sd": "date" ,"ed":"","desc":"vaccineCode", "status":"status"},
 }
 
 var patDict = ["name","gender","birthDate","address"]
@@ -168,7 +168,7 @@ $("#timeline_date_reset").click( function() {
 */
 function rect_onMouseOver(d) {
   var header1Text = "Type: " + d.resourceType +
-                    "</br>Status: " + d.status +
+                    "</br>Status: " +   d[visitDict[d.resourceType].status] +
                     "</br>Description: " + findDescription(d) +
                     "</br>Date: " + findStartDate(d);
   $('#header1').html(header1Text);
@@ -486,17 +486,25 @@ function findLastObjects(xPos) {
     var lastObjectsPretty = {}
     d3.selectAll("rect.bar")[0].forEach(function(obj,i) {
       var entry = d3.select(obj)[0][0];
-      console.log(entry);
-
+      var endX = chartWidth
+      entry.endX = endX
+      if (Object.keys(entry.__data__).indexOf('abatementDateTime') != -1) {
+        endX = x(new Date(entry.__data__['abatementDateTime']));
+        entry.endX = endX
+      }
+      if (Object.keys(lastObjects).indexOf(entry.__data__.resourceType) == -1) {
+        lastObjects[entry.__data__.resourceType] = [];
+      }
       if (entry.attributes['x'].nodeValue <= xPos) {
-        // "Totally different objects: replace entry with new value
-        if ((Object.keys(lastObjects).indexOf(entry.__data__.resourceType) == -1) ||
-           (lastObjects[entry.__data__.resourceType][0].attributes['x'].nodeValue < entry.attributes['x'].nodeValue)) {
-            lastObjects[entry.__data__.resourceType] = [entry]
-        }
-          //same objects on the same day: stack in array
-        else if (lastObjects[entry.__data__.resourceType][0].attributes['x'].nodeValue == entry.attributes['x'].nodeValue) {
-            lastObjects[entry.__data__.resourceType].push(entry);
+        if ((lastObjects[entry.__data__.resourceType].length == 0) || (lastObjects[entry.__data__.resourceType][0].attributes['x'].nodeValue < entry.attributes['x'].nodeValue)) {
+          var nonEnd = []
+          if (entry.__data__.resourceType == "Condition") {
+            nonEnd = lastObjects[entry.__data__.resourceType].filter(obj => obj.endX == chartWidth);
+          }
+          lastObjects[entry.__data__.resourceType] = [entry].concat(nonEnd);
+        } else if ((lastObjects[entry.__data__.resourceType][0].attributes['x'].nodeValue == entry.attributes['x'].nodeValue) ||
+                    (entry.__data__.resourceType == "Condition" && lastObjects[entry.__data__.resourceType][0].endX ==  entry.endX )){
+          lastObjects[entry.__data__.resourceType].push(entry);
         }
       }
     });
@@ -504,7 +512,7 @@ function findLastObjects(xPos) {
       lastObjectsPretty[obj] = ''
       lastObjects[obj].forEach( function (entryObj, indx) {
         var entry = d3.select(entryObj)[0][0];
-        var header1Text = "</br>Status: " + entry.__data__.status +
+        var header1Text = "</br>Status: " +  entry.__data__[visitDict[entry.__data__.resourceType].status] +
                       "</br>Description: " + findDescription(entry.__data__) +
                       "</br>Date: " + findStartDate(entry.__data__) +"</br></br>";
         lastObjectsPretty[obj] += header1Text;
