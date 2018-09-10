@@ -67,20 +67,23 @@
     <button id="timeline_date_reset">Reset</button>
     <div id="patInfoPlaceholder"/>
   </div>
-  <div id="legend_placeholder" style="position:relative; left:20px;"></div>
+
 
 
 <div id="dialog-modal" style="display:none;">
         <div id='filteredObjs'></div>
     </div>
  </div>
-<div id="treeview_placeholder"/>
-  <svg class="chart" ></svg>
+  <div id="treeview_placeholder">
+    <div id="legend_placeholder" style="position:absolute; left:20px;"></div>
+    <svg id='timeline' class="chart" style="position:absolute; left:100px"></svg>
+  </div>
+
 <script type="application/javascript">
-var margin = {top: 40, right: 40, bottom: 40, left:40},
+var margin = {top: 40, right: 40, bottom: 40, left:0},
         width = 1500,
         height =750;
-var originalTransform = [40,60];
+var originalTransform = [60,60];
 
 var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effectiveDateTime" ,"ed":"","desc":"code", "status":"status"},
 	"Claim": {"color": "orange", "height":.1,"sd": "billablePeriod" ,"ed":"billablePeriod","desc":"total", "status":"status"},
@@ -115,15 +118,15 @@ $("#timeline_date_stop").datepicker()
 var organizationDict = {};
 var organizationColorDict = {};
 var legendShapeChart = d3.select('#legend_placeholder').insert("svg")
-                .attr("height", 70)
-                .attr("width",1500)
+                .attr("height", 1000)
+                .attr("width",75)
 //Taken from http://bl.ocks.org/robschmuecker/6afc2ecb05b191359862
 // =================================================================
 var panSpeed = 200;
 
 var isZoomed=false;
 function zoomFunc() {
-    var svg = d3.select('#treeview_placeholder').select('g')
+    var svg = d3.select('#treeview_placeholder #timeline').select('g')
     var updatedTransform  = svg.attr("transform")
     translateText= "translate(" + d3.event.translate + ")";
     updatedTransform = updatedTransform.replace(/translate\([0-9., -]+\)/,translateText);
@@ -196,7 +199,7 @@ function rect_onClick(d) {
     var overlayDialogObj = {
           autoOpen: true,
           height: ($(window).height() - 200),
-          position : {my: "top center", at: "top center", of: $("#treeview_placeholder")},
+          position : {my: "top center", at: "top center", of: $("#timeline")},
           width: 700,
           modal: true,
           title: "Filtered Object Information",
@@ -219,7 +222,7 @@ function summary_onClick(d) {
     var overlayDialogObj = {
           autoOpen: true,
           height: ($(window).height() - 200),
-          position : {my: "top center", at: "top center", of: $("#treeview_placeholder")},
+          position : {my: "top center", at: "top center", of: $("#timeline")},
           width: 700,
           modal: true,
           title: "Summary of patient information",
@@ -271,16 +274,31 @@ function findStopDate(d) {
   })
   return stopDate
 }
-
+function findObsDescription(d) {
+  var descObj = d[visitDict[d.resourceType]["desc"]];
+  var description = ""
+  var objsToCheck = [d]
+  if (Object.keys(d).indexOf("component") != -1) {
+      objsToCheck=d['component'];
+  }
+  objsToCheck.forEach( function(checkObj) {
+      if (Object.keys(checkObj).indexOf("valueQuantity") != -1) {
+        description += `${descObj["text"]} ( ${checkObj["valueQuantity"]["value"]} ${checkObj["valueQuantity"]["unit"]} )`
+      } else if (Object.keys(checkObj).indexOf("valueString") != -1) {
+        description += `${checkObj["text"]} ( ${checkObj["valueString"]["value"]} )`
+      } else if (Object.keys(checkObj).indexOf("valueCodeableConcept") != -1) {
+        description += `${descObj["text"]} ( ${checkObj["valueCodeableConcept"]["text"]} )`
+      }
+  })
+  return description
+}
 function findDescription(d) {
   var descObj = d[visitDict[d.resourceType]["desc"]];
   var description = descObj["text"]
-  if (description == undefined) {
-     if (Object.keys(descObj).indexOf("value") != -1) {
-        description = descObj["value"] + descObj['code'];
-     } else {
-        description = descObj[0]["text"]
-     }
+  if (d.resourceType == "Observation" ) {
+      description = findObsDescription(d)
+  } else if (Object.keys(descObj).indexOf("value") != -1) {
+    description = descObj["value"] + descObj['code'];
   }
   return description;
 }
@@ -324,7 +342,7 @@ function resetMenuFile(json,start,stop,filterList) {
     //ptInfoArray.sort(function(a,b) {console.log(a); return a.issued.localeCompare(b.issued); });
     if (start === "") {start = findStartDate(ptInfoArray[0])}
     if (stop === "") { stop = endDate}
-    var svg = d3.select('#treeview_placeholder').select('svg')
+    var svg = d3.select('#treeview_placeholder').select('#timeline')
     svg.selectAll("*").remove();
     $("#timeline_date_start").datepicker("setDate",new Date(start))
     $("#timeline_date_stop").datepicker("setDate",new Date(stop))
@@ -374,7 +392,7 @@ function resetMenuFile(json,start,stop,filterList) {
             var matches = regex.exec(transform);
             var scale= 1
             if (matches[3]) {scale = matches[3]}
-            var xVal =(d3.event.x-matches[1])/scale
+            var xVal =(d3.event.x-matches[1]-100)/scale
             var selectBar = display.append("line")
                                      .attr('class','summaryBar')
                                      .attr("x1", xVal)
@@ -395,8 +413,8 @@ function resetMenuFile(json,start,stop,filterList) {
       //Adds xAXIS to g
 
     zoomListener.translate(originalTransform).scale(1)
-    var svgG = d3.select('#treeview_placeholder').select('svg').select('g')
-    svgG.selectAll('.rect')
+    var svgG = d3.select('#treeview_placeholder').select('#timeline').select('g')
+    svgG.selectAll('.rect:not(.legend)')
       .data(ptInfoArray)
       .enter().append('rect')
       .attr('class', 'bar')
@@ -552,11 +570,11 @@ function createLegend() {
     .enter()
 
   legend.append("g:rect")
-    .attr("y", 40)
-    .attr("width", 120)
-    .attr("height", 20)
+    .attr("y", function(d,i) { return 40 + (75 *i)})
+    .attr("width", 30)
+    .attr("height", 70)
     .attr("class", function(d) {return "legend"})
-    .attr("x", function(d,i) { return 0 + (150*i)})
+    .attr("x", 0)
     .attr("fill",function(d) {return visitDict[d].color;})
     .on("click", function(d) {
       var deactivate = false;
