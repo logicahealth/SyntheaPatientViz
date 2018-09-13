@@ -295,6 +295,9 @@ function findObsDescription(d) {
 function findDescription(d) {
   var descObj = d[visitDict[d.resourceType]["desc"]];
   var description = descObj["text"]
+  if (d.resourceType == "Encounter"){
+      description = descObj[0]["text"]
+  }
   if (d.resourceType == "Observation" ) {
       description = findObsDescription(d)
   } else if (Object.keys(descObj).indexOf("value") != -1) {
