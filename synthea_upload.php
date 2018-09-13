@@ -55,6 +55,7 @@
     var files = "<?php  foreach(glob('./local/*.json') as $filename) { echo $filename.",";  };?>"
     filesArray = files.split(",")
     filesArray.pop()
+    $("#vivSelect").append("<option selected disabled>Select Value...</option>");
     for( var localFile in filesArray) {
       $("#vivSelect").append("<option val='"+filesArray[localFile]+"'>"+filesArray[localFile]+"</option>");
     }
