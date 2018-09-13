@@ -615,8 +615,8 @@ function createLegend() {
     });
   legend.append("text")
     .text(function(d) { return(d) })
-    .attr("y", 35)
-    .attr("x", function(d,i) { return 0 + (150*i)})
+    .attr("transform", function(d,i) {var  yval =40 + (75*i); return `translate(40,${yval})rotate(90)` })
+    .style("font-size", "8.5px");
 
   var legend = d3.select('#legend_placeholder').selectAll("svg")
   legend.append("text")
