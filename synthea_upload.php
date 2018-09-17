@@ -298,8 +298,12 @@ function findDescription(d) {
   var description = descObj["text"]
   if (d.resourceType == "Encounter"){
       description = descObj[0]["text"]
-  }
-  if (d.resourceType == "Observation" ) {
+  } else if (d.resourceType == "CarePlan"){
+      description = d['category'][0]["text"]
+      d['activity'].forEach(function (entry) {
+        description += "<br>    - "+ entry['detail']['code']['text']
+      })
+  } else if (d.resourceType == "Observation" ) {
       description = findObsDescription(d)
   } else if (Object.keys(descObj).indexOf("value") != -1) {
     description = descObj["value"] + descObj['code'];
