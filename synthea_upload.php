@@ -97,7 +97,7 @@ var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effecti
 	"Immunization": {"color": "pink", "height":.8,"sd": "date" ,"ed":"","desc":"vaccineCode", "status":"status"},
 }
 
-var patDict = ["name","gender","birthDate","address"]
+var patDict = ["name","gender","birthDate", "deceasedDateTime","address"]
 var chartHeight = height - margin.top - margin.bottom;
 var chartWidth = width - margin.left - margin.right
 var y = d3.scale.linear()
@@ -324,6 +324,7 @@ function findDescription(d) {
 */
 function resetMenuFile(json,start,stop,filterList) {
   condDepthMax = 0
+  endDate = "12/31/"+ currentDate.getFullYear()
   existingConds = []
 
   //Read in the INSTALL JSON file
@@ -349,7 +350,13 @@ function resetMenuFile(json,start,stop,filterList) {
     createPatientLegend(patInfo);
     //ptInfoArray.sort(function(a,b) {console.log(a); return a.issued.localeCompare(b.issued); });
     if (start === "") {start = findStartDate(ptInfoArray[0])}
-    if (stop === "") { stop = endDate}
+    if (stop === "") {
+      stop = endDate
+      if (Object.keys(patInfo).indexOf("deceasedDateTime") !== -1) {
+        endDate = patInfo["deceasedDateTime"];
+        stop = endDate.substr(0,4) + "-12-31"
+      }
+    }
     var svg = d3.select('#treeview_placeholder').select('#timeline')
     svg.selectAll("*").remove();
     $("#timeline_date_start").datepicker("setDate",new Date(start))
