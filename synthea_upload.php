@@ -638,7 +638,7 @@ function createLegend() {
           .attr("x", 0)
           .attr("y", 20 )
           .attr("text-anchor", "left")
-          .style("font-size", "16px")
+          .style("font-size", "12px")
           .text("Color Legend")
 }
 //d3.select("#legend_placeholder").datum(null).call(legendShapeChart);
