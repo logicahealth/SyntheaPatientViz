@@ -577,6 +577,7 @@ function createPatientLegend(patientDict) {
     $("#patInfoPlaceholder").append("</ul>")
 }
 function createLegend() {
+  $("#legend_placeholder svg").empty()
   var legend = legendShapeChart.append("svg:g").selectAll("g.legend")
     .attr("transform", function(d, i) {return "translate(" + (i * 125) +",30)"; }).append("path")
             .style("stroke", "black")
@@ -620,7 +621,7 @@ function createLegend() {
       selectValue = d3.select('#vivSelect').property('value')
       shownTypes = d3.select('#legend_placeholder').selectAll(".active").data()
       if  (shownTypes.length === 0) {
-        createLegend();
+        d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return visitDict[element].color});
         shownTypes= Object.keys(visitDict)
       }
       resetMenuFile(currentJSON,
