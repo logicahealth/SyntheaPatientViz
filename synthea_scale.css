@@ -56,5 +56,10 @@ div.toolTipBody {
     margin-bottom: 2px;
     color:#3300FF;
 }
+.brush .extent {
+  stroke: #fff;
+  fill-opacity: .125;
+  shape-rendering: crispEdges;
+}
 
   </style>

@@ -44,6 +44,9 @@
       <div id="routinesTip" ></div>
       <div class="tooltipTail"></div>
     </div>
+    <div id="ctrlToolTip" class="tooltip" style="opacity:0;">
+      <div id="header1" class="header"></div>
+    </div>
   </div>
   <div id="descrHeader" ></div>
    <div>
@@ -62,9 +65,10 @@
   </script>
   </br>
     <label title="Set the data parameters for the timeline.">Select date range to view:</label>
-    <input type="text" id="timeline_date_start" >
+    <!--input type="text" id="timeline_date_start" >
     <input type="text" id="timeline_date_stop">
-    <button id="timeline_date_update">Update</button>
+    <button id="timeline_date_update">Update</button -->
+    <div id="timeCtl"></div>
     <button id="timeline_date_reset">Reset</button>
     <div id="patInfoPlaceholder"/>
   </div>
@@ -111,7 +115,10 @@ colors = d3.scale.category20b()
 backgroundColors = d3.scale.category20()
 var currentDate = new Date();
 var currentJSON;
+var start = "";
+var stop = "";
 var existingConds = [];
+var dateArray = [];
 var condDepthMax = 1
 var endDate = "12/31/"+ currentDate.getFullYear()
 $("#timeline_date_start").datepicker()
@@ -133,6 +140,7 @@ function zoomFunc() {
     updatedTransform = updatedTransform.replace(/translate\([0-9., -]+\)/,translateText);
     svg.attr("transform", updatedTransform);
 }
+
 var zoomListener = d3.behavior.zoom().scaleExtent([.5,2])
                                      .on("zoom", zoomFunc);
 //===================================================================
@@ -158,11 +166,9 @@ $("#timeline_date_update").click( function() {
 */
 
 $("#timeline_date_reset").click( function() {
-  $("#timeline_date_start")[0].value = ""
-  $("#timeline_date_stop")[0].value = ""
   d3.select('#legend_placeholder').selectAll("svg").selectAll("*").attr("class","")
-  createLegend();
   resetMenuFile(currentJSON,"","",Object.keys(visitDict))
+  createLegend();
 })
 
 /*
@@ -322,7 +328,7 @@ function findDescription(d) {
 *  Main function to set up the scales and objects necessary to show
 *  the install information
 */
-function resetMenuFile(json,start,stop,filterList) {
+function resetMenuFile(json,startVal,stopVal,filterList) {
   condDepthMax = 0
   endDate = "12/31/"+ currentDate.getFullYear()
   existingConds = []
@@ -335,8 +341,11 @@ function resetMenuFile(json,start,stop,filterList) {
     *  TODO: Add a more specific date to the end.
     */
     var ptInfoArray = [];
+    dateArray = [];
     json["entry"].forEach(function (val, indx) {
       if (filterList.indexOf(val["resource"]['resourceType']) != -1) {
+        var occurDate = findStartDate(val['resource'])
+        dateArray.push(occurDate)
         ptInfoArray.push(val["resource"])
       } else if (val["resource"]['resourceType'] == "Organization") {
          if (Object.keys(organizationDict).indexOf(val["resource"]['id']) == -1) {
@@ -349,6 +358,8 @@ function resetMenuFile(json,start,stop,filterList) {
     })
     createPatientLegend(patInfo);
     //ptInfoArray.sort(function(a,b) {console.log(a); return a.issued.localeCompare(b.issued); });
+    start = startVal
+    stop = stopVal
     if (start === "") {start = findStartDate(ptInfoArray[0])}
     if (stop === "") {
       stop = endDate
@@ -359,8 +370,6 @@ function resetMenuFile(json,start,stop,filterList) {
     }
     var svg = d3.select('#treeview_placeholder').select('#timeline')
     svg.selectAll("*").remove();
-    $("#timeline_date_start").datepicker("setDate",new Date(start))
-    $("#timeline_date_stop").datepicker("setDate",new Date(stop))
 
     // Generate a time scale to position the dates along the axis
     // domain uses the dates above, rangeRound is set to keep it within
@@ -502,7 +511,6 @@ function resetMenuFile(json,start,stop,filterList) {
       .attr("dy", ".35em")
       .attr("transform", "rotate(90)")
       .style("text-anchor", "end");
-
     /*
     *  Set all of the ".bar" classed bars, all of the install information, to have the
     *  mouse events described above.
@@ -567,7 +575,7 @@ function createPatientLegend(patientDict) {
             } else if (key == "address") {
                 objectData = '<ul class="columns">'
                 patientDict[key].forEach(function(addr) {
-                  objectData += `<li>${addr["line"]} ${addr["city"]},${addr["state"]} ${addr["postalCode"]} </li> `
+                  objectData += `<li>${addr["line"]} ${addr["city"]},${addr["state"]} ${addr["postalCode"]}` + '</li>'
                 })
                 objectData += '</ul>'
             }
@@ -578,6 +586,7 @@ function createPatientLegend(patientDict) {
 }
 function createLegend() {
   $("#legend_placeholder svg").empty()
+  $("#timeCtl").empty()
   var legend = legendShapeChart.append("svg:g").selectAll("g.legend")
     .attr("transform", function(d, i) {return "translate(" + (i * 125) +",30)"; }).append("path")
             .style("stroke", "black")
@@ -641,9 +650,73 @@ function createLegend() {
           .attr("text-anchor", "left")
           .style("font-size", "12px")
           .text("Color Legend")
+          
+      // Creating the legend control
+      ctrlX = d3.time.scale()
+        .domain([new Date(start), new Date(stop)])
+        .range([0, 750])
+        .clamp(true);
+      // Generate the xAxis for the above scale
+      var brush = d3.svg.brush()
+        .x(ctrlX)
+        .extent([new Date(start), new Date(stop)])
+        .on("brush", ctlZoomFunc);
+      function ctlZoomFunc() {
+          var value = brush.extent()[0];
+          shownTypes = d3.select('#legend_placeholder').selectAll(".active").data()
+          if  (shownTypes.length === 0) {
+            d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return visitDict[element].color});
+            shownTypes= Object.keys(visitDict)
+          }
+          var header1Text = "Date: " + ctrlX.invert(d3.event.sourceEvent.x);
+          $('#ctrlToolTip div').html(header1Text);
+          d3.select("#ctrlToolTip").style("left", (d3.event.sourceEvent.pageX + 0) + "px")
+                  .style("top", (d3.event.sourceEvent.pageY - 0) + "px")
+                  .style("opacity", ".9");
+          d3.select(".extent").attr("height","7px").style("fill","steelblue")
+          resetMenuFile(currentJSON,
+                    brush.extent()[0],
+                    brush.extent()[1],
+                   shownTypes)
+      }
+      var axisTimeControl = d3.select('#timeCtl').insert("svg")
+                      .attr("height", 50)
+                      .attr("width",1500)
+                      .insert('g')
+                      .attr("height", 50)
+                      .attr("width",1500)
+                      .attr('class', 'x axis chart')
+                      .on('mousemove', function(d) {
+                          var header1Text = "Date: " + ctrlX.invert(d3.event.x);
+                          $('#ctrlToolTip div').html(header1Text);
+                          d3.select("#ctrlToolTip").style("left", (d3.event.pageX + 0) + "px")
+                                  .style("top", (d3.event.pageY - 0) + "px")
+                                  .style("opacity", ".9");
+                      }).on('mouseout', function(d) {
+                          $('#ctrlToolTip div').html();
+                          d3.select("#ctrlToolTip").style("opacity", "0");
+                      })
+
+      var ctrlXAxis = d3.svg.axis()
+        .scale(ctrlX)
+        .orient('middle')
+        .tickSize(10)
+        .tickPadding(8);
+      var activityHisto = d3.layout.histogram()
+                            .bins(ctrlX.ticks(d3.time.week,1))
+                            .value(function(d) {return new Date(d)})
+      d3.select('#timeCtl').select('g').selectAll('.histo').data(activityHisto(dateArray)).enter().append('rect')
+                     .attr('fill',"firebrick")
+                     .attr('x', 1)
+                     .attr('width', 1)
+                     .attr('height', function(d) { return d.y} )
+                     .attr("transform", function(d) { return "translate("+ctrlX(d.x)+",-"+ d.y+")"})
+      axisTimeControl.call(ctrlXAxis)
+                     .attr("transform", "translate(0,25)");
+      axisTimeControl.call(brush);
 }
 //d3.select("#legend_placeholder").datum(null).call(legendShapeChart);
-createLegend();
+//createLegend();
 
 try {
     var json = <?php
@@ -652,7 +725,7 @@ try {
         $jsonText =  '""';
       echo $jsonText;
       ?>;
-    resetMenuFile(json,"","", Object.keys(visitDict))
+    resetMenuFile(json,start,stop, Object.keys(visitDict))
     currentJSON=json
 } catch (error) {console.log(error)
 }
