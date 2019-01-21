@@ -726,6 +726,7 @@ try {
       echo $jsonText;
       ?>;
     resetMenuFile(json,start,stop, Object.keys(visitDict))
+    createLegend()
     currentJSON=json
 } catch (error) {console.log(error)
 }
