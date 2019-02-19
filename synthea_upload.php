@@ -118,11 +118,12 @@ var currentJSON;
 var start = "";
 var stop = "";
 var existingConds = [];
+var longCondition = {};
+var conditionList = [];
+var condCounter = 0;
 var dateArray = [];
 var condDepthMax = 1
-var endDate = "12/31/"+ currentDate.getFullYear()
-$("#timeline_date_start").datepicker()
-$("#timeline_date_stop").datepicker()
+var endDate = currentDate.getFullYear() + "-12-31"
 var organizationDict = {};
 var organizationColorDict = {};
 var legendShapeChart = d3.select('#legend_placeholder').insert("svg")
@@ -330,8 +331,11 @@ function findDescription(d) {
 */
 function resetMenuFile(json,startVal,stopVal,filterList) {
   condDepthMax = 0
-  endDate = "12/31/"+ currentDate.getFullYear()
+  condCounter = 0
+  endDate = currentDate.getFullYear() + "-12-31T00:00:00"
   existingConds = []
+  longCondition = {}
+  conditionList = []
 
   //Read in the INSTALL JSON file
     /*
@@ -344,8 +348,10 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
     dateArray = [];
     json["entry"].forEach(function (val, indx) {
       if (filterList.indexOf(val["resource"]['resourceType']) != -1) {
-        var occurDate = findStartDate(val['resource'])
-        dateArray.push(occurDate)
+        dateArray.push(findStartDate(val['resource']))
+        if (val["resource"]['resourceType'] == "Condition"){
+            conditionList.push(val['resource'])
+        }
         ptInfoArray.push(val["resource"])
       } else if (val["resource"]['resourceType'] == "Organization") {
          if (Object.keys(organizationDict).indexOf(val["resource"]['id']) == -1) {
@@ -354,6 +360,28 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
          }
       } else if (val["resource"]['resourceType'] == "Patient") {
           patInfo = val["resource"];
+      }
+    })
+
+    conditionList.sort(function(a,b) {return findStartDate(a) < findStartDate(b)})
+    conditionList.forEach(function(val) {
+      // Increase count of conditions as each condition is read in
+      // Here to observe conditions with no abatement time.
+      ++condCounter
+      if (Object.keys(longCondition).indexOf(findStartDate(val)) == -1) {
+        // If is new date, add its value here assuming new increase is correct
+        longCondition[findStartDate(val)] = condCounter
+      } else {
+        // Otherwise, increment known number
+        longCondition[findStartDate(val)]++
+      }
+      if (Object.keys(longCondition).indexOf(findStopDate(val)) == -1) {
+        //Find conditions end date, and add decrement on that date
+        longCondition[findStopDate(val)] = longCondition[findStartDate(val)] - 1
+        // if not an "infinite" condition, drop the overall number of conditions.
+        if (findStopDate(val) !== endDate) {
+          condCounter--
+        }
       }
     })
     createPatientLegend(patInfo);
@@ -650,7 +678,7 @@ function createLegend() {
           .attr("text-anchor", "left")
           .style("font-size", "12px")
           .text("Color Legend")
-          
+
       // Creating the legend control
       ctrlX = d3.time.scale()
         .domain([new Date(start), new Date(stop)])
@@ -702,6 +730,24 @@ function createLegend() {
         .orient('middle')
         .tickSize(10)
         .tickPadding(8);
+      var sortedConditions = Object.keys(longCondition).sort(function(a,b) {
+          var dateA = new Date(a);
+          var dateB = new Date(b);
+          if (dateA < dateB ) {
+            return -1;
+          }
+          if (dateA > dateB ) {
+            return 1;
+          }
+          return 0;
+      })
+      var activityLine = d3.svg.line()
+                           .x(function(d) { return ctrlX(new Date(d))})
+                          .y(function(d) { return -longCondition[d] * 1.25})
+                           .interpolate("step-after");
+      axisTimeControl.insert("path")
+                     .attr("class","line histo")
+                     .attr('d', activityLine(sortedConditions));
       var activityHisto = d3.layout.histogram()
                             .bins(ctrlX.ticks(d3.time.week,1))
                             .value(function(d) {return new Date(d)})
