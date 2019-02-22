@@ -305,6 +305,9 @@ function findDescription(d) {
   var description = descObj["text"]
   if (d.resourceType == "Encounter"){
       description = descObj[0]["text"]
+      if (Object.keys(d).indexOf("reason") !== -1) {
+        description += ": " + d['reason'][0]['coding'][0]['display']
+      }
   } else if (d.resourceType == "CarePlan"){
       description = d['category'][0]["text"]
       d['activity'].forEach(function (entry) {
