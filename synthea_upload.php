@@ -167,10 +167,16 @@ $("#timeline_date_update").click( function() {
 */
 
 $("#timeline_date_reset").click( function() {
-  $("#loadWheel").show()
-  d3.select('#legend_placeholder').selectAll("svg").selectAll("*").attr("class","")
-  resetMenuFile(currentJSON.entry,"","",Object.keys(visitDict))
-  createLegend();
+  if (currentJSON !== undefined) {
+      $("#loadWheel").show(0)
+      // HACK: Load wheel image doesn't have time to "show" before resetting occurs
+      // setTimeout delays the call to resetMenuFile until shown
+      window.setTimeout( function () {
+          d3.select('#legend_placeholder').selectAll("svg").selectAll("*").attr("class","")
+          resetMenuFile(currentJSON.entry,"","",Object.keys(visitDict))
+          createLegend();
+      },100);
+  }
 })
 
 /*
@@ -321,7 +327,7 @@ function findDescription(d) {
   return description;
 }
   d3.select("#vivSelect").on("change", function(){
-    $("#loadWheel").show()
+    $("#loadWheel").show(0)
     d3.json(d3.select('#vivSelect').property('value'), function(json) {
         currentJSON=json;
         resetMenuFile(json.entry,"","", Object.keys(visitDict))
@@ -668,6 +674,7 @@ function createLegend() {
         .extent([new Date(start), new Date(stop)])
         .on("brushend", ctlZoomFunc);
       function ctlZoomFunc() {
+          $("#loadWheel").show(0)
           var value = brush.extent()[0];
           shownTypes = d3.select('#legend_placeholder').selectAll(".active").data()
           if  (shownTypes.length === 0) {
