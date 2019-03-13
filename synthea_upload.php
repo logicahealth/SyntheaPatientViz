@@ -70,6 +70,7 @@
     <button id="timeline_date_update">Update</button -->
     <div id="timeCtl"></div>
     <button id="timeline_date_reset">Reset</button>
+    <img id="loadWheel" title="Loading" src="./images/loading-big.gif" style="display: none;"/>
     <div id="patInfoPlaceholder"/>
   </div>
 
@@ -167,9 +168,16 @@ $("#timeline_date_update").click( function() {
 */
 
 $("#timeline_date_reset").click( function() {
-  d3.select('#legend_placeholder').selectAll("svg").selectAll("*").attr("class","")
-  resetMenuFile(currentJSON,"","",Object.keys(visitDict))
-  createLegend();
+  if (currentJSON !== undefined) {
+      $("#loadWheel").show(0)
+      // HACK: Load wheel image doesn't have time to "show" before resetting occurs
+      // setTimeout delays the call to resetMenuFile until shown
+      window.setTimeout( function () {
+          d3.select('#legend_placeholder').selectAll("svg").selectAll("*").attr("class","")
+          resetMenuFile(currentJSON.entry,"","",Object.keys(visitDict))
+          createLegend();
+      },100);
+  }
 })
 
 /*
@@ -249,18 +257,20 @@ function summary_onClick(d) {
 
 function findStartDate(d) {
   var startDate=''
-  var dateKeys = [visitDict[d.resourceType]["sd"]]
-  if (typeof visitDict[d.resourceType]["sd"] == 'object') {
-    dateKeys = visitDict[d.resourceType]["sd"];
-  }
-  dateKeys.forEach(function(dateKey) {
-  if (Object.keys(d).indexOf(dateKey) != -1) {
-      startDate = d[dateKey]
-      if (typeof d[dateKey] == 'object') {
-         startDate = d[dateKey]['start'];
-      }
+  if( Object.keys(visitDict).indexOf(d.resourceType) !== -1) {
+    var dateKeys = [visitDict[d.resourceType]["sd"]]
+    if (typeof visitDict[d.resourceType]["sd"] == 'object') {
+      dateKeys = visitDict[d.resourceType]["sd"];
     }
-  })
+    dateKeys.forEach(function(dateKey) {
+    if (Object.keys(d).indexOf(dateKey) != -1) {
+        startDate = d[dateKey]
+        if (typeof d[dateKey] == 'object') {
+           startDate = d[dateKey]['start'];
+        }
+      }
+    })
+  }
   return startDate
 }
 function findStopDate(d) {
@@ -321,9 +331,10 @@ function findDescription(d) {
   return description;
 }
   d3.select("#vivSelect").on("change", function(){
+    $("#loadWheel").show(0)
     d3.json(d3.select('#vivSelect').property('value'), function(json) {
         currentJSON=json;
-        resetMenuFile(json,"","", Object.keys(visitDict))
+        resetMenuFile(json.entry,"","", Object.keys(visitDict))
         createLegend();
     });
   });
@@ -349,7 +360,7 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
     */
     var ptInfoArray = [];
     dateArray = [];
-    json["entry"].forEach(function (val, indx) {
+    json.forEach(function (val, indx) {
       if (filterList.indexOf(val["resource"]['resourceType']) != -1) {
         dateArray.push(findStartDate(val['resource']))
         if (val["resource"]['resourceType'] == "Condition"){
@@ -551,6 +562,7 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
       .on("mouseover", rect_onMouseOver)
       .on("mouseout", rect_onMouseOut)
       .on("click", rect_onClick);
+    $("#loadWheel").hide()
 };
 
 function findLastObjects(xPos) {
@@ -664,10 +676,10 @@ function createLegend() {
         d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return visitDict[element].color});
         shownTypes= Object.keys(visitDict)
       }
-      resetMenuFile(currentJSON,
-                $("#timeline_date_start")[0].value,
-                $("#timeline_date_stop")[0].value,
-               shownTypes)
+      resetMenuFile(currentJSON.entry,
+                    brush.extent()[0],
+                    brush.extent()[1],
+                   shownTypes)
     });
   legend.append("text")
     .text(function(d) { return(d) })
@@ -691,8 +703,9 @@ function createLegend() {
       var brush = d3.svg.brush()
         .x(ctrlX)
         .extent([new Date(start), new Date(stop)])
-        .on("brush", ctlZoomFunc);
+        .on("brushend", ctlZoomFunc);
       function ctlZoomFunc() {
+          $("#loadWheel").show(0)
           var value = brush.extent()[0];
           shownTypes = d3.select('#legend_placeholder').selectAll(".active").data()
           if  (shownTypes.length === 0) {
@@ -705,7 +718,9 @@ function createLegend() {
                   .style("top", (d3.event.sourceEvent.pageY - 0) + "px")
                   .style("opacity", ".9");
           d3.select(".extent").attr("height","7px").style("fill","steelblue")
-          resetMenuFile(currentJSON,
+          var filteredObjs = currentJSON.entry.filter(entry =>  (entry.resource.resourceType == "Condition") || ((brush.extent()[0] <= new Date(findStartDate(entry.resource))) &&
+                                                                (new Date(findStartDate(entry.resource)) < brush.extent()[1])))
+          resetMenuFile(filteredObjs,
                     brush.extent()[0],
                     brush.extent()[1],
                    shownTypes)
@@ -774,10 +789,10 @@ try {
         $jsonText =  '""';
       echo $jsonText;
       ?>;
-    resetMenuFile(json,start,stop, Object.keys(visitDict))
+    resetMenuFile(json.entry,start,stop, Object.keys(visitDict))
     createLegend()
     currentJSON=json
-} catch (error) {console.log(error)
+} catch (error) {    $("#loadWheel").hide()
 }
     </script>
   </body>
