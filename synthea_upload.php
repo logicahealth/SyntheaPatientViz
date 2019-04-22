@@ -99,7 +99,7 @@ var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effecti
 	"CarePlan": {"color": "purple", "height":.5,"sd": "period" ,"ed":"period","desc":"category", "status":"status"},
 	"Procedure": {"color": "steelblue", "height":.6,"sd": ["performedDateTime", "performedPeriod"] ,"ed":["performedDateTime", "performedPeriod"],"desc":"code", "status":"status"},
 	"Condition": {"color": "black", "height":.7,"sd": "onsetDateTime" ,"ed":"abatementDateTime","desc":"code", "status":"clinicalStatus"},
-	"Immunization": {"color": "pink", "height":.8,"sd": "date" ,"ed":"","desc":"vaccineCode", "status":"status"},
+	"Immunization": {"color": "pink", "height":.8,"sd": ["date","occurrenceDateTime"] ,"ed":"","desc":"vaccineCode", "status":"status"},
 }
 
 var patDict = ["name","gender","birthDate", "deceasedDateTime","address"]
@@ -187,7 +187,7 @@ $("#timeline_date_reset").click( function() {
 */
 function rect_onMouseOver(d) {
   var header1Text = "Type: " + d.resourceType +
-                    "</br>Status: " +   d[visitDict[d.resourceType].status] +
+                    "</br>Status: " +  findStatus(d) +
                     "</br>Description: " + findDescription(d) +
                     "</br>Date: " + findStartDate(d);
   $('#header1').html(header1Text);
@@ -254,6 +254,13 @@ function summary_onClick(d) {
        $('#dialog-modal').show();
 }
 
+function findStatus(d) {
+    var status = d[visitDict[d.resourceType].status]
+    if (Object.keys(status).indexOf('coding') !== -1 ) {
+       status = d[visitDict[d.resourceType].status]['coding'][0]['code']
+    }
+    return status
+}
 
 function findStartDate(d) {
   var startDate=''
@@ -262,13 +269,14 @@ function findStartDate(d) {
     if (typeof visitDict[d.resourceType]["sd"] == 'object') {
       dateKeys = visitDict[d.resourceType]["sd"];
     }
-    dateKeys.forEach(function(dateKey) {
-    if (Object.keys(d).indexOf(dateKey) != -1) {
+    dateKeys.some(function(dateKey) {
+      if (Object.keys(d).indexOf(dateKey) != -1) {
         startDate = d[dateKey]
         if (typeof d[dateKey] == 'object') {
            startDate = d[dateKey]['start'];
         }
       }
+      return startDate !== ''
     })
   }
   return startDate
@@ -326,7 +334,12 @@ function findDescription(d) {
   } else if (d.resourceType == "Observation" ) {
       description = findObsDescription(d)
   } else if (Object.keys(descObj).indexOf("value") != -1) {
-    description = descObj["value"] + descObj['code'];
+    description = descObj["value"]
+      if (Object.keys(descObj).indexOf("currency") != -1) {
+         description += descObj["currency"]
+      } else {
+        description += descObj["code"]
+      }
   }
   return description;
 }
