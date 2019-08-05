@@ -1,26 +1,55 @@
 Synthea Visualization
 =====================
-
-How to populate visualization
-++++++++++++++++++++++++++++++
-
-REST Interface
----------------
-
 This is a quick D3 visualization which can be used to display Synthea data
-in a longitudinal format.  This page can be accessed with the cURL program
-to pull down a PHP page with the necessary functions and information.
+in a longitudinal format. It helps with modeling Synthea data and with
+selecting patients for import selectively.
+
+How to use this tool with Synthea
++++++++++++++++++++++++++++++++++
+This page can used by cloning the source code and using it with Apache or the
+PHP command line interpreter; or you can use the REST interface against the
+OSEHRA hosted version to convert the files into local HTML files that you can
+view locally.
+
+REST Interface against OSEHRA Server
+------------------------------------
+This page can be accessed with the command line program (like curl) to pull
+down an HTML page with the necessary functions and information.
 
 For example:
 
-.. parsed-literal::
+.. code-block:: bash
 
-  curl https://code.osehra.org/synthea/synthea_upload.php -d @/d/wamp/www/synthea/syntheaold/Arianna984\ Hand679_130ec445-9989-49a4-888c-233bcfa9e7fc.json > arianna.php
+  curl https://code.osehra.org/synthea/synthea_upload.php -d @/d/wamp/www/synthea/syntheaold/Arianna984\ Hand679_130ec445-9989-49a4-888c-233bcfa9e7fc.json > arianna.html
 
-will pull down the entirety of the page
+will pull down the visualization for that single patient.
 
-Traditional Display
---------------------
+For reference, here are a set of commands (for \*nix and for Windows) that will
+create HTML pages for each patient output from Synthea.
+
+\*Nix:
+
+.. code-block:: bash
+
+  folder="/Users/sam/workspace/repo/synthea/output/fhir" # Replace this with your correct path
+  rm $folder/*.html
+  for f in $folder/*_*.json; do echo $f; curl https://code.osehra.org/synthea/synthea_upload.php -d @$f > $f.html; done
+
+Windows:
+
+.. code-block:: powershell
+
+  $folder="C:\Users\Hp\synthea\output\fhir" # Replace this with your correct path
+  del $folder/*.html
+  $files = Get-ChildItem $folder -Filter *_*.json
+  foreach ($f in $files) {
+    echo $f.FullName
+    Invoke-RestMethod -Uri https://code.osehra.org/synthea/synthea_upload.php -Method Post -InFile $f.FullName > ($f.FullName + ".html")
+  }
+
+
+Serve Locally using this Repository
+-----------------------------------
 
 For those with a directory of files from Synthea who wish to view the data can
 also clone the repository and place the files in a directory called ``local``.
@@ -47,6 +76,17 @@ A directory structure like this::
 
 will populate the "Select synthetic patient file" box and allow the user to
 view the patient information.
+
+Here are step by step instructions using PHP command line server.
+
+.. code-block:: bash
+
+  git clone https://github.com/OSEHRA-Sandbox/SyntheaPatientViz
+  cd SyntheaPatientViz
+  mkdir local
+  cp ../../synthea/output/fhir/*_*.json local/
+  php -S localhost:8000
+  # Use your browser to navigate to localhost:8000/synthea_upload.php
 
 How to use the Visualization
 +++++++++++++++++++++++++++++
