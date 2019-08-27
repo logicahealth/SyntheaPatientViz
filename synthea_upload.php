@@ -609,7 +609,7 @@ function findLastObjects(xPos) {
       lastObjectsPretty[obj] = ''
       lastObjects[obj].forEach( function (entryObj, indx) {
         var entry = d3.select(entryObj)[0][0];
-        var header1Text = "</br>Status: " +  entry.__data__[visitDict[entry.__data__.resourceType].status] +
+        var header1Text = "</br>Status: " +  findStatus(entry.__data__) +
                       "</br>Description: " + findDescription(entry.__data__) +
                       "</br>Date: " + findStartDate(entry.__data__) +"</br></br>";
         lastObjectsPretty[obj] += header1Text;
