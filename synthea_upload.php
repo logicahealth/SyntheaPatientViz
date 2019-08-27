@@ -51,8 +51,17 @@
   <div id="descrHeader" ></div>
    <div>
 
-    <label > Select synthetic patient file:</label>
+    <label > Select synthetic patient file locally:</label>
     <select id="vivSelect"></select>
+    <div id='verticalLine' style='border-left: thick solid #ff0000;'></div>
+    <label > or enter a FHIR server to query:</label>
+    <div>
+      <label for='serverURL' > URL of FHIR server:</label>
+      <input type='text' id='serverURL' value='http://localhost:8080/api/'></input>
+      <label for='patID' > ID value of patient:</label>
+      <input type='text' id='patID' value=''></input>
+      <input type='button' id="fhirRequest" value='Query'></input>
+    </div>
   <script type="application/javascript">
 
     var files = "<?php  foreach(glob('./local/*.json') as $filename) { echo $filename.",";  };?>"
@@ -91,15 +100,23 @@ var margin = {top: 40, right: 40, bottom: 40, left:0},
         height =750;
 var originalTransform = [60,60];
 
-var visitDict = { "DiagnosticReport": {"color": "red", "height":0,"sd": "effectiveDateTime" ,"ed":"","desc":"code", "status":"status"},
-	"Claim": {"color": "orange", "height":.1,"sd": "billablePeriod" ,"ed":"billablePeriod","desc":"total", "status":"status"},
-	"MedicationRequest": {"color": "yellow", "height":.2,"sd": "authoredOn" ,"ed":"","desc":"medicationCodeableConcept", "status":"status"},
-	"Encounter": {"color": "green", "height":.3,"sd": "period" ,"ed":"period","desc":"type", "status":"status"},
-	"Observation": {"color": "blue", "height":.4,"sd": "issued" ,"ed":"","desc":"code", "status":"status"},
-	"CarePlan": {"color": "purple", "height":.5,"sd": "period" ,"ed":"period","desc":"category", "status":"status"},
-	"Procedure": {"color": "steelblue", "height":.6,"sd": ["performedDateTime", "performedPeriod"] ,"ed":["performedDateTime", "performedPeriod"],"desc":"code", "status":"status"},
-	"Condition": {"color": "black", "height":.7,"sd": "onsetDateTime" ,"ed":"abatementDateTime","desc":"code", "status":"clinicalStatus"},
-	"Immunization": {"color": "pink", "height":.8,"sd": ["date","occurrenceDateTime"] ,"ed":"","desc":"vaccineCode", "status":"status"},
+var borderColor = {
+  "MedicationDispense": "red",
+  "MedicationStatement": "black",
+  "MedicationAdministration": "blue",
+  "Appointment": "black",
+  "Encounter": "blue"
+}
+
+var SynVisitDict = { "DiagnosticReport": {"regex": /DiagnosticReport/, "color": "red", "height":0,"sd": "effectiveDateTime" ,"ed":"","desc":{"code": "display|text"}, "status":"status"},
+  "Claim": {"regex": /Claim/, "color": "orange", "height":.1,"sd": "billablePeriod" ,"ed":"billablePeriod","desc":{"total":"value&currency"}, "status":"status"},
+  "MedicationRequest": {"regex": /Medication.+/, "color": "yellow", "height":.2,"sd": ["authoredOn", "effectivePeriod"] ,"ed":"","desc":{"medicationCodeableConcept":"display|text","medicationReference":"display"}, "status":"status"},
+  "Encounter": {"regex": /Encounter|Appointment/, "color": "green", "height":.3,"sd": ["period","start"] ,"ed":"period","desc":{"valueString":"display|text","type":"display|text"}, "status":"status"},
+  "Observation": {"regex": /Observation/, "color": "blue", "height":.4,"sd": ["effectiveDateTime","issued"] ,"ed":"","desc":"code" , "status":"status"},
+  "CarePlan": {"regex": /CarePlan/, "color": "purple", "height":.5,"sd": "period" ,"ed":"period","desc": {"category": 'display|text'}, "status":"status"},
+  "Procedure": {"regex": /Procedure/, "color": "steelblue", "height":.6,"sd": ["performedDateTime", "performedPeriod"] ,"ed":["performedDateTime", "performedPeriod"],"desc":{"code" : "display|text"}, "status":"status"},
+  "Condition": {"regex": /Condition/, "color": "black", "height":.7,"sd": "onsetDateTime" ,"ed":"abatementDateTime","desc":{"code" : "display|text"}, "status":"clinicalStatus"},
+  "Immunization": {"regex": /Immunization/, "color": "pink", "height":.8,"sd": ["date","occurrenceDateTime"] ,"ed":"","desc":{"vaccineCode": "display|text"}, "status":"status"},
 }
 
 var patDict = ["name","gender","birthDate", "deceasedDateTime","address"]
@@ -120,6 +137,7 @@ var start = "";
 var stop = "";
 var existingConds = [];
 var longCondition = {};
+var medicationIds = {};
 var conditionList = [];
 var condCounter = 0;
 var dateArray = [];
@@ -156,10 +174,40 @@ $("#timeline_date_update").click( function() {
     alert("Cannot show data that begins and ends on the same day")
   }
   else {
-    resetMenuFile(currentJSON, $("#timeline_date_start")[0].value, $("#timeline_date_stop")[0].value,Object.keys(visitDict))
+    resetMenuFile(currentJSON, $("#timeline_date_start")[0].value, $("#timeline_date_stop")[0].value,Object.keys(SynVisitDict))
   }
 })
 
+
+/*
+*   Funtion to catch the FHIR query capability and send the ajax call
+*/
+
+$('#fhirRequest').click(function() {
+
+  id = $('#patID').val()
+  url = $('#serverURL').val()
+  query= (url+'Patient/' + id + '/$everything')
+  $("#loadWheel").show(0)
+  $.ajax({
+    url:query,
+    success: function(result){
+      currentJSON=result
+      resetMenuFile(currentJSON.entry,"","", Object.keys(SynVisitDict))
+      createLegend();
+    },
+    error: function(result) {
+      var error = result.responseText
+      if (error === "") {
+          error = "No response from server.  Ensure FHIR server is running"
+      } else {
+          error = JSON.parse(result.responseText).issue[0].diagnostics
+      }
+      alert(`Error: ${error}`)
+      $("#loadWheel").hide(0)
+    },
+  })
+})
 /*
 *  Function to handle the resetting of the time scale.
 *  Clears the values of the two date boxes and redraws the
@@ -174,7 +222,7 @@ $("#timeline_date_reset").click( function() {
       // setTimeout delays the call to resetMenuFile until shown
       window.setTimeout( function () {
           d3.select('#legend_placeholder').selectAll("svg").selectAll("*").attr("class","")
-          resetMenuFile(currentJSON.entry,"","",Object.keys(visitDict))
+          resetMenuFile(currentJSON.entry,"","",Object.keys(SynVisitDict))
           createLegend();
       },100);
   }
@@ -223,9 +271,9 @@ function rect_onClick(d) {
            $("#filteredObjs").empty();
             Object.keys(d).forEach(function(key) {
                 var objectData = d[key]
-                if(key === "serviceProvider") {
+                /*if(key === "serviceProvider") {
                     objectData = organizationDict[d.serviceProvider.reference.substr(9)]
-                }
+                }*/
                 $("#filteredObjs").append("<p>"+key+":<pre>"+JSON.stringify(objectData,null,2)+"</pre></p>")
             });
           }
@@ -255,19 +303,22 @@ function summary_onClick(d) {
 }
 
 function findStatus(d) {
-    var status = d[visitDict[d.resourceType].status]
+    var status = "No Information"
+    if (Object.keys(d).indexOf(SynVisitDict[d.overallType].status) !== -1) {
+      status = d[SynVisitDict[d.overallType].status]
+    }
     if (Object.keys(status).indexOf('coding') !== -1 ) {
-       status = d[visitDict[d.resourceType].status]['coding'][0]['code']
+       status = d[SynVisitDict[d.overallType].status]['coding'][0]['code']
     }
     return status
 }
 
 function findStartDate(d) {
   var startDate=''
-  if( Object.keys(visitDict).indexOf(d.resourceType) !== -1) {
-    var dateKeys = [visitDict[d.resourceType]["sd"]]
-    if (typeof visitDict[d.resourceType]["sd"] == 'object') {
-      dateKeys = visitDict[d.resourceType]["sd"];
+  if( Object.keys(SynVisitDict).indexOf(d.overallType) !== -1) {
+    var dateKeys = [SynVisitDict[d.overallType]["sd"]]
+    if (typeof SynVisitDict[d.overallType]["sd"] == 'object') {
+      dateKeys = SynVisitDict[d.overallType]["sd"];
     }
     dateKeys.some(function(dateKey) {
       if (Object.keys(d).indexOf(dateKey) != -1) {
@@ -278,17 +329,20 @@ function findStartDate(d) {
       }
       return startDate !== ''
     })
+    if (d.overallType == "MedicationRequest") {
+      startDate = medicationIds[d.id]
+    }
   }
   return startDate
 }
 function findStopDate(d) {
   var stopDate = endDate
-  if(visitDict[d.resourceType]["ed"] == "") {
+  if(SynVisitDict[d.overallType]["ed"] == "") {
    return 3;
   }
-  var dateKeys = [visitDict[d.resourceType]["ed"]]
-  if (typeof visitDict[d.resourceType]["ed"] == 'object') {
-    dateKeys = visitDict[d.resourceType]["ed"];
+  var dateKeys = [SynVisitDict[d.overallType]["ed"]]
+  if (typeof SynVisitDict[d.overallType]["ed"] == 'object') {
+    dateKeys = SynVisitDict[d.overallType]["ed"];
   }
   dateKeys.forEach(function(dateKey) {
   if (Object.keys(d).indexOf(dateKey) != -1) {
@@ -301,53 +355,98 @@ function findStopDate(d) {
   return stopDate
 }
 function findObsDescription(d) {
-  var descObj = d[visitDict[d.resourceType]["desc"]];
-  var description = ""
+  var descObj = d[SynVisitDict[d.overallType]["desc"]];
+  var text = ""
+  var value = ""
   var objsToCheck = [d]
   if (Object.keys(d).indexOf("component") != -1) {
       objsToCheck=d['component'];
   }
   objsToCheck.forEach( function(checkObj) {
+      // check for text description
+      text = checkObj["text"]
+      if (Object.keys(descObj).indexOf('coding') !== -1) {
+          text = descObj["coding"][0]["display"]
+      }
+      //Check for value
       if (Object.keys(checkObj).indexOf("valueQuantity") != -1) {
-        description += `${descObj["text"]} ( ${checkObj["valueQuantity"]["value"]} ${checkObj["valueQuantity"]["unit"]} )`
+        value =  `${checkObj["valueQuantity"]["value"]} ${checkObj["valueQuantity"]["unit"]}`
       } else if (Object.keys(checkObj).indexOf("valueString") != -1) {
-        description += `${checkObj["text"]} ( ${checkObj["valueString"]["value"]} )`
+        if (typeof checkObj["valueString"] == 'object') {
+            value = checkObj["valueString"]["value"]
+        } else {
+          value = checkObj["valueString"]
+        }
       } else if (Object.keys(checkObj).indexOf("valueCodeableConcept") != -1) {
-        description += `${descObj["text"]} ( ${checkObj["valueCodeableConcept"]["text"]} )`
+        text = checkObj["valueCodeableConcept"]["text"]
       }
   })
-  return description
+  return `${text} ( ${value} )`
 }
 function findDescription(d) {
-  var descObj = d[visitDict[d.resourceType]["desc"]];
-  var description = descObj["text"]
-  if (d.resourceType == "Encounter"){
-      description = descObj[0]["text"]
-      if (Object.keys(d).indexOf("reason") !== -1) {
-        description += ": " + d['reason'][0]['coding'][0]['display']
-      }
-  } else if (d.resourceType == "CarePlan"){
-      description = d['category'][0]["text"]
-      d['activity'].forEach(function (entry) {
-        description += "<br>    - "+ entry['detail']['code']['text']
+    // Special logic for observations
+    if (d.overallType == "Observation" ) {
+          return findObsDescription(d)
+    }
+    // Start with a default value for all objects
+    var descriptionVals = {'coding':"display"}
+    var description = ""
+    // Put all value pairs into description options
+    if (typeof SynVisitDict[d.overallType]["desc"] == 'object') {
+      Object.keys(SynVisitDict[d.overallType]["desc"]).forEach( function(entry) {
+        descriptionVals[entry] = SynVisitDict[d.overallType]["desc"][entry]
       })
-  } else if (d.resourceType == "Observation" ) {
-      description = findObsDescription(d)
-  } else if (Object.keys(descObj).indexOf("value") != -1) {
-    description = descObj["value"]
-      if (Object.keys(descObj).indexOf("currency") != -1) {
-         description += descObj["currency"]
-      } else {
-        description += descObj["code"]
+    } else {
+      descriptionVals[SynVisitDict[d.overallType]["desc"]] = ""
+    }
+    // Loop through each pair to see if a description is found there
+    // Use a "some" function to prevent extra loops from happening when
+    // a description is found
+    Object.keys(descriptionVals).some(function(tag) {
+      //Check resultant string for values
+      // '&' indicates the two should be concat-ed to make the description
+      // '|' indicates the value could be in either of the objects
+      if (Object.keys(d).indexOf(tag) !== -1) {
+        var dataObject = d[tag]
+        // Loop your way "down" through the objects until coding or arrays are not found.
+        while(true) {
+          var codingFlag = true
+          var arrayFlag = true
+          // Check for "coding" object, removes a layer
+          if (Object.keys(dataObject).indexOf('coding') !== -1) {
+            codingFlag = false;
+            dataObject = dataObject["coding"]
+          }
+          // Assume the data we want is in the first object of the array
+          if (Array.isArray(dataObject)) {
+            arrayFlag = false;
+            dataObject = dataObject[0]
+          }
+          //No more layers, break and check for data
+          if (arrayFlag && codingFlag) {
+              break
+          }
+        }
+        descriptionVals[tag].split('|').forEach(function(test) {
+          test.split('&').forEach(function(val) {
+            if (dataObject[val] !== undefined) {
+              description += dataObject[val]
+            }
+          })
+          if (description !== "") {
+            return true
+          }
+        })
+
       }
-  }
-  return description;
+    })
+    return description
 }
   d3.select("#vivSelect").on("change", function(){
     $("#loadWheel").show(0)
     d3.json(d3.select('#vivSelect').property('value'), function(json) {
         currentJSON=json;
-        resetMenuFile(json.entry,"","", Object.keys(visitDict))
+        resetMenuFile(json.entry,"","", Object.keys(SynVisitDict))
         createLegend();
     });
   });
@@ -360,9 +459,10 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
   condDepthMax = 0
   condCounter = 0
   endDate = currentDate.getFullYear() + "-12-31T00:00:00"
-  existingConds = []
-  longCondition = {}
-  conditionList = []
+  existingConds = [];
+  longCondition = {};
+  conditionList = [];
+  medicationIds = {};
 
   //Read in the INSTALL JSON file
     /*
@@ -374,20 +474,35 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
     var ptInfoArray = [];
     dateArray = [];
     json.forEach(function (val, indx) {
-      if (filterList.indexOf(val["resource"]['resourceType']) != -1) {
-        dateArray.push(findStartDate(val['resource']))
-        if (val["resource"]['resourceType'] == "Condition"){
-            conditionList.push(val['resource'])
-        }
-        ptInfoArray.push(val["resource"])
-      } else if (val["resource"]['resourceType'] == "Organization") {
-         if (Object.keys(organizationDict).indexOf(val["resource"]['id']) == -1) {
-             organizationDict[val["resource"]['id']] = val["resource"]
-             organizationColorDict[val["resource"]['identifier'][0]["value"]] = colors(indx)
-         }
-      } else if (val["resource"]['resourceType'] == "Patient") {
-          patInfo = val["resource"];
-      }
+      Object.keys(SynVisitDict).forEach(function(key) {
+        if(SynVisitDict[key]['regex'].exec(val["resource"].resourceType)) {
+          dateArray.push(findStartDate(val['resource']))
+          val["resource"]['overallType'] = key
+          if (filterList.indexOf(val["resource"]['overallType']) != -1) {
+            ptInfoArray.push(val["resource"])
+          }
+          if (val["resource"]['resourceType'] == "Condition"){
+                conditionList.push(val['resource'])
+          } else if (val["resource"]['resourceType'] == "Organization") {
+             if (Object.keys(organizationDict).indexOf(val["resource"]['id']) == -1) {
+                 organizationDict[val["resource"]['id']] = val["resource"]
+                 organizationColorDict[val["resource"]['identifier'][0]["value"]] = colors(indx)
+             }
+          } else if (val["resource"]['overallType'] == "MedicationRequest") {
+              var medStartDate = ""
+              if (Object.keys(val['resource']).indexOf('effectivePeriod') != -1) {
+                  medStartDate = val['resource']["effectivePeriod"]['start'];
+              } else {
+                medStartDate = val['resource']["authoredOn"]
+              }
+              if (medStartDate !== undefined) {
+                  medicationIds[val['resource']['id']] = medStartDate
+              }
+          }
+        }else if (val["resource"]['resourceType'] == "Patient") {
+              patInfo = val["resource"];
+          }
+      });
     })
     ptInfoArray.sort(function(a,b) {return findStartDate(a) > findStartDate(b)?1:-1})
     conditionList.sort(function(a,b) {return findStartDate(a) > findStartDate(b)?1:-1})
@@ -499,8 +614,8 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
       .attr('class', 'bar')
       .attr('x', function(d) {return x(new Date(findStartDate(d))); })
       .attr('width', function(d) {
-          var yCoord = height * visitDict[d.resourceType]["height"]
-          if (d.resourceType === "Condition"){
+          var yCoord = height * SynVisitDict[d.overallType]["height"]
+          if (d.overallType === "Condition"){
               var stopDate = x(new Date(findStopDate(d)))
               var startDate = x(new Date(findStartDate(d)))
               d.depthVal=0
@@ -517,11 +632,11 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
           else {return 3}
       })
       .attr('y', function(d) {
-          if (d.resourceType === "Condition"){
+          if (d.overallType === "Condition"){
               var heightVal = (height * .095)/(condDepthMax+1)
-              return (height * visitDict[d.resourceType]["height"]) + (heightVal * d.depthVal);
+              return (height * SynVisitDict[d.overallType]["height"]) + (heightVal * d.depthVal);
           } else {
-            var yCoord = height * visitDict[d.resourceType]["height"]
+            var yCoord = height * SynVisitDict[d.overallType]["height"]
             d.originalY = yCoord
             return yCoord
           }
@@ -531,9 +646,9 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
       .attr('height', function(d) {
           // Check to see if existing objects need to be shrunk
           var xCoord = x(new Date(findStartDate(d)))
-          var yCoord = height * visitDict[d.resourceType]["height"]
+          var yCoord = height * SynVisitDict[d.overallType]["height"]
           var existingBars;
-          if (d.resourceType === "Condition"){
+          if (d.overallType === "Condition"){
               var heightVal = (height * .095)/(condDepthMax+1)
           } else {
               existingBars= $(".bar[x='"+xCoord+"'][originalY='"+yCoord+"']")
@@ -545,11 +660,14 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
           }
           return heightVal
       })
-      .attr("fill", function(d,i) {return visitDict[d.resourceType]["color"]; })
+      .attr("fill", function(d,i) {return SynVisitDict[d.overallType]["color"]; })
       .attr('stroke', function(d,i) {
           var color = "white";
-          if (d.serviceProvider) {
+          /*if (d.serviceProvider) {
             color = organizationColorDict[organizationDict[d.serviceProvider.reference.substr(9)]['identifier'][0]["value"]]
+          }*/
+          if (Object.keys(borderColor).indexOf(d.resourceType) != -1) {
+            color = borderColor[d.resourceType]
           }
           return color;
       })
@@ -622,20 +740,25 @@ function createPatientLegend(patientDict) {
     $("#patInfoPlaceholder").html('<h4>Patient Information</h4><ul class="columns"">');
     Object.keys(patientDict).forEach(function(key) {
         if (patDict.indexOf(key) != -1) {
-            var objectData = JSON.stringify(patientDict[key])
+            var dataObject = patientDict[key]
             if (key == "name") {
-               objectData = `${patientDict[key][0]['prefix']} ${patientDict[key][0]['given']} ${patientDict[key][0]['family']}`
-               if  (patientDict[key].length > 1) {
-                 objectData = objectData + `(nee ${patientDict[key][1]['family']})`
-               }
+                if (Array.isArray(dataObject))  {
+                  dataObject = dataObject[0]
+                }
+                dataString = `${dataObject['prefix']} ${dataObject['given']} ${dataObject['family']}`
+                if  (patientDict[key].length > 1) {
+                  dataString = dataString + `(nee ${dataObject['family']})`
+                }
             } else if (key == "address") {
-                objectData = '<ul class="columns">'
-                patientDict[key].forEach(function(addr) {
-                  objectData += `<li>${addr["line"]} ${addr["city"]},${addr["state"]} ${addr["postalCode"]}` + '</li>'
+                dataString = '<ul class="columns">'
+                dataObject.forEach(function(addr) {
+                  dataString += `<li>${addr["line"]} ${addr["city"]},${addr["state"]} ${addr["postalCode"]}` + '</li>'
                 })
-                objectData += '</ul>'
+                dataString += '</ul>'
+            } else {
+              dataString = JSON.stringify(dataObject);
             }
-            $("#patInfoPlaceholder ul").append("<li>"+key+":"+objectData+"</li>")
+            $("#patInfoPlaceholder ul").append("<li>"+key+":"+dataString+"</li>")
         }
     });
     $("#patInfoPlaceholder").append("</ul>")
@@ -647,7 +770,7 @@ function createLegend() {
     .attr("transform", function(d, i) {return "translate(" + (i * 125) +",30)"; }).append("path")
             .style("stroke", "black")
             .attr("r", 1e-6)
-    .data(Object.keys(visitDict))
+    .data(Object.keys(SynVisitDict))
     .enter()
 
   legend.append("g:rect")
@@ -656,13 +779,13 @@ function createLegend() {
     .attr("height", 70)
     .attr("class", function(d) {return "legend"})
     .attr("x", 0)
-    .attr("fill",function(d) {return visitDict[d].color;})
+    .attr("fill",function(d) {return SynVisitDict[d].color;})
     .on("click", function(d) {
       var deactivate = false;
       // Find elements that are active to deactivate
       d3.select('#legend_placeholder').selectAll('.active')
       .attr("fill", function(element) {
-        var returnColor  = visitDict[element].color;
+        var returnColor  = SynVisitDict[element].color;
         if(d === element ) { deactivate= true; returnColor = "gray" }
         return returnColor
       }).attr("class", function(element) {
@@ -675,7 +798,7 @@ function createLegend() {
         d3.select('#legend_placeholder').selectAll('rect:not(.active)')
         .attr("fill", function(element) {
           var returnColor  = "gray";
-          if(d === element ) { returnColor = visitDict[d].color }
+          if(d === element ) { returnColor = SynVisitDict[d].color }
           return returnColor
         }).attr("class", function(element) {
           var classVal = ""
@@ -686,8 +809,8 @@ function createLegend() {
       selectValue = d3.select('#vivSelect').property('value')
       shownTypes = d3.select('#legend_placeholder').selectAll(".active").data()
       if  (shownTypes.length === 0) {
-        d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return visitDict[element].color});
-        shownTypes= Object.keys(visitDict)
+        d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return SynVisitDict[element].color});
+        shownTypes= Object.keys(SynVisitDict)
       }
       resetMenuFile(currentJSON.entry,
                     brush.extent()[0],
@@ -722,8 +845,8 @@ function createLegend() {
           var value = brush.extent()[0];
           shownTypes = d3.select('#legend_placeholder').selectAll(".active").data()
           if  (shownTypes.length === 0) {
-            d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return visitDict[element].color});
-            shownTypes= Object.keys(visitDict)
+            d3.select('#legend_placeholder').selectAll('rect').attr("fill", function(element) { return SynVisitDict[element].color});
+            shownTypes= Object.keys(SynVisitDict)
           }
           var header1Text = "Date: " + ctrlX.invert(d3.event.sourceEvent.x);
           $('#ctrlToolTip div').html(header1Text);
@@ -802,7 +925,7 @@ try {
         $jsonText =  '""';
       echo $jsonText;
       ?>;
-    resetMenuFile(json.entry,start,stop, Object.keys(visitDict))
+    resetMenuFile(json.entry,start,stop, Object.keys(SynVisitDict))
     createLegend()
     currentJSON=json
 } catch (error) {    $("#loadWheel").hide()
