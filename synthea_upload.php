@@ -389,8 +389,8 @@ function resetMenuFile(json,startVal,stopVal,filterList) {
           patInfo = val["resource"];
       }
     })
-
-    conditionList.sort(function(a,b) {return findStartDate(a) < findStartDate(b)})
+    ptInfoArray.sort(function(a,b) {return findStartDate(a) > findStartDate(b)?1:-1})
+    conditionList.sort(function(a,b) {return findStartDate(a) > findStartDate(b)?1:-1})
     conditionList.forEach(function(val) {
       // Increase count of conditions as each condition is read in
       // Here to observe conditions with no abatement time.
