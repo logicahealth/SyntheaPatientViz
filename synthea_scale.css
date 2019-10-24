@@ -61,6 +61,10 @@ div.toolTipBody {
   fill-opacity: .125;
   shape-rendering: crispEdges;
 }
+
+.bar, .summaryBar {
+  cursor: pointer;
+}
 #timeCtl .domain {
   cursor: pointer;
 }
