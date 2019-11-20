@@ -108,7 +108,7 @@ var borderColor = {
   "Encounter": "blue"
 }
 
-var SynVisitDict = { "DiagnosticReport": {"regex": /DiagnosticReport/, "color": "red", "height":0,"sd": "effectiveDateTime" ,"ed":"","desc":{"code": "display|text"}, "status":"status"},
+var SynVisitDict = { "DiagnosticReport": {"regex": /DiagnosticReport/, "color": "red", "height":0,"sd": ["effectiveDateTime", "effectivePeriod"] ,"ed":"","desc":{"code": "display|text"}, "status":"status"},
   "Claim": {"regex": /Claim/, "color": "orange", "height":.1,"sd": "billablePeriod" ,"ed":"billablePeriod","desc":{"total":"value&currency"}, "status":"status"},
   "MedicationRequest": {"regex": /Medication.+/, "color": "yellow", "height":.2,"sd": ["authoredOn", "effectivePeriod"] ,"ed":"","desc":{"medicationCodeableConcept":"display|text","medicationReference":"display"}, "status":"status"},
   "Encounter": {"regex": /Encounter|Appointment/, "color": "green", "height":.3,"sd": ["period","start"] ,"ed":"period","desc":{"valueString":"display|text","type":"display|text"}, "status":"status"},
