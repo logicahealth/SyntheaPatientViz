@@ -88,6 +88,27 @@ Here are step by step instructions using PHP command line server.
   php -S localhost:8000
   # Use your browser to navigate to localhost:8000/synthea_upload.php
 
+Pulling data from a FHIR server
+-------------------------------
+
+The visualization has the capaiblity to query a running FHIR server to capture
+information to display.  The information set by default, pointing to a server
+at http://localhost:8080/api, assumes that the FHIR-on-VistA server created
+during the `synthea-compose`_ build process is the target server.  This is not
+the only server that would return the correct information.  Other example pairs
+are found here:
+
++-------------------------------------------------+-----------------------+
+|                   Server                        |        Patient Id     |
++-------------------------------------------------+-----------------------+
+|        http://fhirtest.uhn.ca/baseR4/           |    id1571093588143    |
++-------------------------------------------------+-----------------------+
+| https://api.logicahealth.org/CoFsandboxR4/open/ |    SMART-1869612      |
++-------------------------------------------------+-----------------------+
+
+Once the FHIR query returns, the data will be parsed, the timeline populated,
+and the page will be ready for usage.
+
 How to use the Visualization
 +++++++++++++++++++++++++++++
 
@@ -146,3 +167,4 @@ Double-clicking the mouse will zoom in the page allowing for easier access to
 the smallest bars of the display.  Double-clicking again will zoom out allowing
 for display of the overall picture again.
 
+.. _`synthea-compose`: https://github.com/OSEHRA/synthea-compose/

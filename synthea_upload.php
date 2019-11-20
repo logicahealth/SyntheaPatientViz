@@ -57,9 +57,9 @@
     <label > or enter a FHIR server to query:</label>
     <div>
       <label for='serverURL' > URL of FHIR server:</label>
-      <input type='text' id='serverURL' value='http://localhost:8080/api/'></input>
+      <input type='text' id='serverURL' value='http://fhirtest.uhn.ca/baseDstu3/'></input>
       <label for='patID' > ID value of patient:</label>
-      <input type='text' id='patID' value=''></input>
+      <input type='text' id='patID' value='1425682'></input>
       <input type='button' id="fhirRequest" value='Query'></input>
     </div>
   <script type="application/javascript">
