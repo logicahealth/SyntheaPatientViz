@@ -146,3 +146,4 @@ Double-clicking the mouse will zoom in the page allowing for easier access to
 the smallest bars of the display.  Double-clicking again will zoom out allowing
 for display of the overall picture again.
 
+**Note: The assets in this repository were stewarded by OSEHRA and transferred to Logica on February 14th, 2020 upon OSEHRA's permanent closure. While the work remains available as Open Source for continued community use, copyright and licensing statements may not have been updated to reflect this transfer.**
